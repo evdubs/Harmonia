@@ -24,7 +24,7 @@ import com.xeiam.xchange.dto.trade.FixedRateLoanOrder;
 import com.xeiam.xchange.dto.trade.FloatingRateLoanOrder;
 
 /**
- * Hello world!
+ * Main entry point
  *
  */
 public class Harmonia {
