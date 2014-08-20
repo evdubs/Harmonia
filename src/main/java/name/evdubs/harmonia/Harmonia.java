@@ -126,10 +126,12 @@ public class Harmonia {
 					for (BitfinexLendLevel bidLevel : book.getBids()) {
 						if (bidLevel.getRate().compareTo(bestBidRate) > 0) {
 							bestBidRate = bidLevel.getRate();
-						}
 
-						if ("Yes".equalsIgnoreCase(bidLevel.getFrr())) {
-							bidFrr = true;
+							if ("Yes".equalsIgnoreCase(bidLevel.getFrr())) {
+								bidFrr = true;
+							} else {
+								bidFrr = false;
+							}
 						}
 					}
 
@@ -153,17 +155,17 @@ public class Harmonia {
 									secondBestAskOutsideBestBid = bestAskOutsideBestBid;
 									bestAskOutsideBestBid = askLevel.getRate();
 									bestAskOutsideBestBidAmount = BigDecimal.ZERO;
+
+									if ("Yes".equals(askLevel.getFrr())) {
+										bestAskFrr = true;
+									} else {
+										bestAskFrr = false;
+									}
 								}
 
 								// Add to the amount if we've found the best ask
 								if (askLevel.getRate().compareTo(bestAskOutsideBestBid) == 0) {
 									bestAskOutsideBestBidAmount = bestAskOutsideBestBidAmount.add(askLevel.getAmount());
-								}
-
-								if ("Yes".equals(askLevel.getFrr())) {
-									bestAskFrr = true;
-								} else {
-									bestAskFrr = false;
 								}
 							}
 						}
