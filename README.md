@@ -6,7 +6,7 @@ Harmonia requires a JDK and Apache Maven
 ## Starting Harmonia
 After cloning the repository, execute the following commands in the Harmonia base directory:
 
-	mvn build
+	mvn compile
 
 	mvn exec:java -Dexec.mainClass="name.evdubs.harmonia.Harmonia"
 
