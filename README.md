@@ -1,7 +1,7 @@
 Harmonia is a Java console application to allow participants in the USD Swap offer market to automatically submit swap offers at competitive rates.
 
 ## Installation
-Harmonia requires a JDK and Apache Maven
+Harmonia requires a JDK, Apache Maven, and XChange 1.2.0-SNAPSHOT. You will, at the moment, need to clone https://github.com/timmolter/XChange, build, and install it. This will not be necessary when version 1.2.0 is published.
 
 ## Starting Harmonia
 After cloning the repository, execute the following commands in the Harmonia base directory:
