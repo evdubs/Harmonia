@@ -63,7 +63,8 @@ public class Harmonia {
 		BitfinexTradeServiceRaw tradeService = (BitfinexTradeServiceRaw) bfx.getPollingTradeService();
 
 		BigDecimal fifty = new BigDecimal("50");
-		BigDecimal rateMax = new BigDecimal("2555"); // 7% per day * 365 days
+		BigDecimal maxRate = new BigDecimal("2555"); // 7% per day * 365 days
+		BigDecimal minRate = new BigDecimal("10"); // 10% per 365 days
 		double millisecondsInDay = 86400000.0;
 
 		BigDecimal depositFunds = BigDecimal.ZERO;
@@ -124,6 +125,11 @@ public class Harmonia {
 					BitfinexLendDepth book = marketDataService.getBitfinexLendBook("USD", 5000, 5000);
 
 					for (BitfinexLendLevel bidLevel : book.getBids()) {
+						// Ignore any bids below our minimum rate
+						if (bidLevel.getRate().compareTo(minRate) < 0) {
+							continue;
+						}
+						
 						if (bidLevel.getRate().compareTo(bestBidRate) > 0) {
 							bestBidRate = bidLevel.getRate();
 
@@ -144,12 +150,17 @@ public class Harmonia {
 						cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds, BigDecimal.ZERO);
 
 					} else { // flash return rate demanded by sellers, send a competitive fixed rate order
-						BigDecimal bestAskOutsideBestBid = rateMax;
-						BigDecimal secondBestAskOutsideBestBid = rateMax;
+						BigDecimal bestAskOutsideBestBid = maxRate;
+						BigDecimal secondBestAskOutsideBestBid = maxRate;
 						BigDecimal bestAskOutsideBestBidAmount = BigDecimal.ZERO;
 						boolean bestAskFrr = false;
 
 						for (BitfinexLendLevel askLevel : book.getAsks()) {
+							// Ignore any asks below our minimum rate
+							if (askLevel.getRate().compareTo(minRate) < 0) {
+								continue;
+							}
+							
 							if (askLevel.getRate().compareTo(bestBidRate) > 0) {
 								if (askLevel.getRate().compareTo(bestAskOutsideBestBid) < 0) {
 									secondBestAskOutsideBestBid = bestAskOutsideBestBid;
