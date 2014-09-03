@@ -24,3 +24,6 @@ Harmonia is a simple swap offer bot. It will attempt to offer swaps using the fo
 
 ## License
 Public domain
+
+## Tipjar
+If you like this bot and would like for development to continue, please consider sending a donation to 1JSvYwhAWMCKB4zgvMFLDzhRp8u9Hv5Fat
