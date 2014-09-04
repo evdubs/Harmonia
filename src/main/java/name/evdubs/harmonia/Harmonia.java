@@ -12,6 +12,7 @@ import com.xeiam.xchange.ExchangeSpecification;
 import com.xeiam.xchange.bitfinex.v1.BitfinexExchange;
 import com.xeiam.xchange.bitfinex.v1.BitfinexOrderType;
 import com.xeiam.xchange.bitfinex.v1.dto.account.BitfinexBalancesResponse;
+import com.xeiam.xchange.bitfinex.v1.dto.marketdata.BitfinexLend;
 import com.xeiam.xchange.bitfinex.v1.dto.marketdata.BitfinexLendDepth;
 import com.xeiam.xchange.bitfinex.v1.dto.marketdata.BitfinexLendLevel;
 import com.xeiam.xchange.bitfinex.v1.dto.trade.BitfinexCreditResponse;
@@ -76,17 +77,25 @@ public class Harmonia {
 				BitfinexBalancesResponse[] balances = accountService.getBitfinexAccountInfo();
 				BitfinexOfferStatusResponse[] activeOffers = tradeService.getBitfinexOpenOffers();
 				BitfinexCreditResponse[] activeCredits = tradeService.getBitfinexActiveCredits();
+				BitfinexLend[] lends = marketDataService.getBitfinexLends("USD", 0, 1);
 
 				Date currentLoopExecutionDate = new Date();
 				BigDecimal activeCreditAmount = BigDecimal.ZERO;
 				double activeCreditInterest = 0.0;
+				BigDecimal frr = lends[0].getRate();
 
 				for (BitfinexCreditResponse credit : activeCredits) {
 					activeCreditAmount = activeCreditAmount.add(credit.getAmount());
+					BigDecimal creditRate = credit.getRate();
+					
+					// Since we do not allow rates below minRate (which should be greater than zero)
+					// any 0 rate active credit is assumed to be at the flash return rate 
+					if (BigDecimal.ZERO.compareTo(creditRate) == 0) 
+						creditRate = frr;
 
 					activeCreditInterest = activeCreditInterest
 							+ credit.getAmount().doubleValue()
-							* (credit.getRate().doubleValue() / 365 / 100) // rate per day in whole number terms (not percentage)
+							* (creditRate.doubleValue() / 365 / 100) // rate per day in whole number terms (not percentage)
 							* ((double) (currentLoopExecutionDate.getTime() - previousLoopExecutionDate.getTime()) / millisecondsInDay);
 				}
 				
