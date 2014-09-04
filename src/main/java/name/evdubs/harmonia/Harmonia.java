@@ -70,7 +70,7 @@ public class Harmonia {
 
 		BigDecimal depositFunds = BigDecimal.ZERO;
 		double estimatedAccumulatedInterest = 0.0;
-		Date previousLoopExecutionDate = new Date();
+		Date previousLoopIterationDate = new Date();
 
 		while (true) {
 			try {
@@ -79,7 +79,7 @@ public class Harmonia {
 				BitfinexCreditResponse[] activeCredits = tradeService.getBitfinexActiveCredits();
 				BitfinexLend[] lends = marketDataService.getBitfinexLends("USD", 0, 1);
 
-				Date currentLoopExecutionDate = new Date();
+				Date currentLoopIterationDate = new Date();
 				BigDecimal activeCreditAmount = BigDecimal.ZERO;
 				double activeCreditInterest = 0.0;
 				BigDecimal frr = lends[0].getRate();
@@ -96,10 +96,10 @@ public class Harmonia {
 					activeCreditInterest = activeCreditInterest
 							+ credit.getAmount().doubleValue()
 							* (creditRate.doubleValue() / 365 / 100) // rate per day in whole number terms (not percentage)
-							* ((double) (currentLoopExecutionDate.getTime() - previousLoopExecutionDate.getTime()) / millisecondsInDay);
+							* ((double) (currentLoopIterationDate.getTime() - previousLoopIterationDate.getTime()) / millisecondsInDay);
 				}
 				
-				previousLoopExecutionDate = currentLoopExecutionDate;
+				previousLoopIterationDate = currentLoopIterationDate;
 
 				BigDecimal activeOfferAmount = BigDecimal.ZERO;
 				BigDecimal activeOfferRate = BigDecimal.ZERO;
