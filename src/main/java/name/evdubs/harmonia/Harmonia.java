@@ -130,6 +130,7 @@ public class Harmonia {
 				// If we have $50 or more of inactive funding, get data and go through calculation
 				if (inactiveFunds.compareTo(fifty) >= 0) {
 					BigDecimal bestBidRate = BigDecimal.ZERO;
+					double prevTimestamp = (((double) (new Date()).getTime()) / 1000) - 60 * 10;
 					boolean bidFrr = false;
 					BitfinexLendDepth book = marketDataService.getBitfinexLendBook("USD", 5000, 5000);
 
@@ -156,7 +157,7 @@ public class Harmonia {
 									inactiveFunds, BigDecimal.ZERO)) {
 
 						// Cancel existing orders and send new FRR order
-						cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds, BigDecimal.ZERO);
+						cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds, BigDecimal.ZERO, frr);
 
 					} else { // flash return rate demanded by sellers, send a competitive fixed rate order
 						BigDecimal bestAskOutsideBestBid = maxRate;
@@ -165,8 +166,8 @@ public class Harmonia {
 						boolean bestAskFrr = false;
 
 						for (BitfinexLendLevel askLevel : book.getAsks()) {
-							// Ignore any asks below our minimum rate
-							if (askLevel.getRate().compareTo(minRate) < 0) {
+							// Ignore any asks below our minimum rate or newer than some arbitrary time period
+							if (askLevel.getRate().compareTo(minRate) < 0 || askLevel.getTimestamp() > prevTimestamp) {
 								continue;
 							}
 							
@@ -196,7 +197,7 @@ public class Harmonia {
 										inactiveFunds, BigDecimal.ZERO)) {
 							// Cancel existing orders and send new FRR order
 							cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds,
-									BigDecimal.ZERO);
+									BigDecimal.ZERO, frr);
 
 						} else if (!bestAskFrr) {
 							// Best ask is not FRR, we need to send a competitive fixed rate
@@ -206,12 +207,12 @@ public class Harmonia {
 								// Don't stay out there alone
 								// Join second best ask outside of best bid
 								cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds,
-										secondBestAskOutsideBestBid);
+										secondBestAskOutsideBestBid, frr);
 							} else if (!matchesCurrentOrder(activeOfferFrr, activeOfferAmount, activeOfferRate, false,
 									inactiveFunds, bestAskOutsideBestBid)) {
 								// Join best ask outside of best bid
 								cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds,
-										bestAskOutsideBestBid);
+										bestAskOutsideBestBid, frr);
 							} else {
 								System.out.println("Matched previous isFrr: " + activeOfferFrr + " amount: "
 										+ activeOfferAmount + " rate: " + activeOfferRate);
@@ -258,7 +259,7 @@ public class Harmonia {
 	}
 
 	private static void cancelPreviousAndSendNewOrder(BitfinexTradeServiceRaw tradeService,
-			BitfinexOfferStatusResponse[] activeOffers, boolean isFrr, BigDecimal amount, BigDecimal rate)
+			BitfinexOfferStatusResponse[] activeOffers, boolean isFrr, BigDecimal amount, BigDecimal rate, BigDecimal frr)
 			throws IOException {
 		// Cancel existing orders
 		if (activeOffers.length != 0) {
@@ -276,7 +277,12 @@ public class Harmonia {
 			System.out.println("Sending " + order.toString());
 			tradeService.placeBitfinexFloatingRateLoanOrder(order, BitfinexOrderType.MARKET);
 		} else {
-			FixedRateLoanOrder order = new FixedRateLoanOrder(OrderType.ASK, "USD", amount, 2, "", null, rate);
+		  // Set the day period for somewhere between 2 and 30 days. We compare our order's rate to the flash return rate.
+		  // If we're at or below the FRR, set the day period to 2. If we're above, use the ratio of our rate to the FRR to
+		  // determine how many days we should offer with a cap of 30 using: (ourRate - frr) / frr * 30
+		  int dayPeriod = Math.max(Math.min((int) ((rate.doubleValue() - frr.doubleValue()) / frr.doubleValue() * 30), 30), 2);
+		  
+			FixedRateLoanOrder order = new FixedRateLoanOrder(OrderType.ASK, "USD", amount, dayPeriod, "", null, rate);
 			System.out.println("Sending " + order.toString());
 			tradeService.placeBitfinexFixedRateLoanOrder(order, BitfinexOrderType.LIMIT);
 		}
