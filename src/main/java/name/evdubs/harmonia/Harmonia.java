@@ -85,16 +85,18 @@ public class Harmonia {
         BigDecimal frr = lends[0].getRate();
 
         for (BitfinexCreditResponse credit : activeCredits) {
-          activeCreditAmount = activeCreditAmount.add(credit.getAmount());
-          BigDecimal creditRate = credit.getRate();
+          if ("USD".equalsIgnoreCase(credit.getCurrency())) {
+            activeCreditAmount = activeCreditAmount.add(credit.getAmount());
+            BigDecimal creditRate = credit.getRate();
 
-          // Since we do not allow rates below minRate (which should be greater than zero)
-          // any 0 rate active credit is assumed to be at the flash return rate
-          if (BigDecimal.ZERO.compareTo(creditRate) == 0)
-            creditRate = frr;
+            // Since we do not allow rates below minRate (which should be greater than zero)
+            // any 0 rate active credit is assumed to be at the flash return rate
+            if (BigDecimal.ZERO.compareTo(creditRate) == 0)
+              creditRate = frr;
 
-          activeCreditInterest = activeCreditInterest + credit.getAmount().doubleValue() * (creditRate.doubleValue() / 365 / 100) // rate per day in whole number terms (not percentage)
-              * ((double) (currentLoopIterationDate.getTime() - previousLoopIterationDate.getTime()) / millisecondsInDay);
+            activeCreditInterest = activeCreditInterest + credit.getAmount().doubleValue() * (creditRate.doubleValue() / 365 / 100) // rate per day in whole number terms (not percentage)
+                * ((double) (currentLoopIterationDate.getTime() - previousLoopIterationDate.getTime()) / millisecondsInDay);
+          }
         }
 
         previousLoopIterationDate = currentLoopIterationDate;
@@ -104,9 +106,11 @@ public class Harmonia {
         boolean activeOfferFrr = false;
 
         for (BitfinexOfferStatusResponse offer : activeOffers) {
-          activeOfferAmount = activeOfferAmount.add(offer.getRemainingAmount());
-          activeOfferRate = offer.getRate();
-          activeOfferFrr = BigDecimal.ZERO.equals(offer.getRate());
+            if ("USD".equalsIgnoreCase(offer.getCurrency())) {
+              activeOfferAmount = activeOfferAmount.add(offer.getRemainingAmount());
+              activeOfferRate = offer.getRate();
+              activeOfferFrr = BigDecimal.ZERO.equals(offer.getRate());
+            }
         }
 
         for (BitfinexBalancesResponse balance : balances) {
@@ -210,7 +214,7 @@ public class Harmonia {
           }
 
         } else {
-          System.out.println("Difference " + depositFunds.subtract(activeCreditAmount) + " not enough to post order");
+          System.out.println("Difference " + inactiveFunds + " not enough to post order");
         }
 
       } catch (IOException e1) {
