@@ -63,7 +63,7 @@ public class Harmonia {
     BitfinexAccountServiceRaw accountService = (BitfinexAccountServiceRaw) bfx.getPollingAccountService();
     BitfinexTradeServiceRaw tradeService = (BitfinexTradeServiceRaw) bfx.getPollingTradeService();
 
-    BigDecimal fifty = new BigDecimal("50");
+    BigDecimal minFunds = new BigDecimal("100"); // minimum amount needed (USD) to lend
     BigDecimal maxRate = new BigDecimal("2555"); // 7% per day * 365 days
     BigDecimal minRate = new BigDecimal("10"); // 10% per 365 days
     double millisecondsInDay = 86400000.0;
@@ -128,8 +128,8 @@ public class Harmonia {
 
         BigDecimal inactiveFunds = depositFunds.subtract(activeCreditAmount);
 
-        // If we have $50 or more of inactive funding, get data and go through calculation
-        if (inactiveFunds.compareTo(fifty) >= 0) {
+        // If we have the minimum or more of inactive funding ($100 USD), get data and go through calculation
+        if (inactiveFunds.compareTo(minFunds) >= 0) {
           BigDecimal bestBidRate = BigDecimal.ZERO;
           double prevTimestamp = (((double) (new Date()).getTime()) / 1000) - 60 * 10;
           boolean bidFrr = false;
