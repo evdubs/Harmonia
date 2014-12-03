@@ -63,7 +63,7 @@ public class Harmonia {
     BitfinexAccountServiceRaw accountService = (BitfinexAccountServiceRaw) bfx.getPollingAccountService();
     BitfinexTradeServiceRaw tradeService = (BitfinexTradeServiceRaw) bfx.getPollingTradeService();
 
-    BigDecimal fifty = new BigDecimal("50");
+    BigDecimal minFunds = new BigDecimal("50"); // minimum amount needed (USD) to lend
     BigDecimal maxRate = new BigDecimal("2555"); // 7% per day * 365 days
     BigDecimal minRate = new BigDecimal("10"); // 10% per 365 days
     double millisecondsInDay = 86400000.0;
@@ -85,16 +85,18 @@ public class Harmonia {
         BigDecimal frr = lends[0].getRate();
 
         for (BitfinexCreditResponse credit : activeCredits) {
-          activeCreditAmount = activeCreditAmount.add(credit.getAmount());
-          BigDecimal creditRate = credit.getRate();
+          if ("USD".equalsIgnoreCase(credit.getCurrency())) {
+            activeCreditAmount = activeCreditAmount.add(credit.getAmount());
+            BigDecimal creditRate = credit.getRate();
 
-          // Since we do not allow rates below minRate (which should be greater than zero)
-          // any 0 rate active credit is assumed to be at the flash return rate
-          if (BigDecimal.ZERO.compareTo(creditRate) == 0)
-            creditRate = frr;
+            // Since we do not allow rates below minRate (which should be greater than zero)
+            // any 0 rate active credit is assumed to be at the flash return rate
+            if (BigDecimal.ZERO.compareTo(creditRate) == 0)
+              creditRate = frr;
 
-          activeCreditInterest = activeCreditInterest + credit.getAmount().doubleValue() * (creditRate.doubleValue() / 365 / 100) // rate per day in whole number terms (not percentage)
-              * ((double) (currentLoopIterationDate.getTime() - previousLoopIterationDate.getTime()) / millisecondsInDay);
+            activeCreditInterest = activeCreditInterest + credit.getAmount().doubleValue() * (creditRate.doubleValue() / 365 / 100) // rate per day in whole number terms (not percentage)
+                * ((double) (currentLoopIterationDate.getTime() - previousLoopIterationDate.getTime()) / millisecondsInDay);
+          }
         }
 
         previousLoopIterationDate = currentLoopIterationDate;
@@ -104,9 +106,11 @@ public class Harmonia {
         boolean activeOfferFrr = false;
 
         for (BitfinexOfferStatusResponse offer : activeOffers) {
-          activeOfferAmount = activeOfferAmount.add(offer.getRemainingAmount());
-          activeOfferRate = offer.getRate();
-          activeOfferFrr = BigDecimal.ZERO.equals(offer.getRate());
+          if ("USD".equalsIgnoreCase(offer.getCurrency())) {
+            activeOfferAmount = activeOfferAmount.add(offer.getRemainingAmount());
+            activeOfferRate = offer.getRate();
+            activeOfferFrr = BigDecimal.ZERO.equals(offer.getRate());
+          }
         }
 
         for (BitfinexBalancesResponse balance : balances) {
@@ -124,8 +128,8 @@ public class Harmonia {
 
         BigDecimal inactiveFunds = depositFunds.subtract(activeCreditAmount);
 
-        // If we have $50 or more of inactive funding, get data and go through calculation
-        if (inactiveFunds.compareTo(fifty) >= 0) {
+        // If we have the minimum or more of inactive funding ($50 USD), get data and go through calculation
+        if (inactiveFunds.compareTo(minFunds) >= 0) {
           BigDecimal bestBidRate = BigDecimal.ZERO;
           double prevTimestamp = (((double) (new Date()).getTime()) / 1000) - 60 * 10;
           boolean bidFrr = false;
@@ -210,7 +214,7 @@ public class Harmonia {
           }
 
         } else {
-          System.out.println("Difference " + depositFunds.subtract(activeCreditAmount) + " not enough to post order");
+          System.out.println("Difference " + inactiveFunds + " not enough to post order");
         }
 
       } catch (IOException e1) {
@@ -248,8 +252,10 @@ public class Harmonia {
     // Cancel existing orders
     if (activeOffers.length != 0) {
       for (BitfinexOfferStatusResponse offer : activeOffers) {
-        System.out.println("Cancelling " + offer.toString());
-        tradeService.cancelBitfinexOffer(Integer.toString(offer.getId()));
+        if ("USD".equalsIgnoreCase(offer.getCurrency())) {
+          System.out.println("Cancelling " + offer.toString());
+          tradeService.cancelBitfinexOffer(Integer.toString(offer.getId()));
+        }
       }
     } else {
       System.out.println("Found no previous order to cancel");
