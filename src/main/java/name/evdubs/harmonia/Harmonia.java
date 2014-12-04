@@ -106,7 +106,7 @@ public class Harmonia {
         boolean activeOfferFrr = false;
 
         for (BitfinexOfferStatusResponse offer : activeOffers) {
-          if ("USD".equalsIgnoreCase(offer.getCurrency())) {
+          if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection()) ) ) {
             activeOfferAmount = activeOfferAmount.add(offer.getRemainingAmount());
             activeOfferRate = offer.getRate();
             activeOfferFrr = BigDecimal.ZERO.equals(offer.getRate());
@@ -252,7 +252,7 @@ public class Harmonia {
     // Cancel existing orders
     if (activeOffers.length != 0) {
       for (BitfinexOfferStatusResponse offer : activeOffers) {
-        if ("USD".equalsIgnoreCase(offer.getCurrency())) {
+        if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection())) ) {
           System.out.println("Cancelling " + offer.toString());
           tradeService.cancelBitfinexOffer(Integer.toString(offer.getId()));
         }
