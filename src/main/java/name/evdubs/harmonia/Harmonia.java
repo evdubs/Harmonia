@@ -109,7 +109,7 @@ public class Harmonia {
           if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection()) ) ) {
             activeOfferAmount = activeOfferAmount.add(offer.getRemainingAmount());
             activeOfferRate = offer.getRate();
-            activeOfferFrr = BigDecimal.ZERO.equals(offer.getRate());
+            activeOfferFrr = BigDecimal.ZERO.compareTo(offer.getRate()) == 0;
           }
         }
 
@@ -272,7 +272,7 @@ public class Harmonia {
       int dayPeriod = Math.max(Math.min((int) ((rate.doubleValue() - frr.doubleValue()) / frr.doubleValue() * 30), 30), 2);
 
       FixedRateLoanOrder order = new FixedRateLoanOrder(OrderType.ASK, "USD", amount, dayPeriod, "", null, rate);
-      System.out.println("Sending " + order.toString() + "rate=" + rate);
+      System.out.println("Sending " + order.toString() + ", rate=" + rate);
       tradeService.placeBitfinexFixedRateLoanOrder(order, BitfinexOrderType.LIMIT);
     }
   }
