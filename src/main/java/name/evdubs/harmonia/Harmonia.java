@@ -106,10 +106,10 @@ public class Harmonia {
         boolean activeOfferFrr = false;
 
         for (BitfinexOfferStatusResponse offer : activeOffers) {
-          if ("USD".equalsIgnoreCase(offer.getCurrency())) {
+          if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection()) ) ) {
             activeOfferAmount = activeOfferAmount.add(offer.getRemainingAmount());
             activeOfferRate = offer.getRate();
-            activeOfferFrr = BigDecimal.ZERO.equals(offer.getRate());
+            activeOfferFrr = BigDecimal.ZERO.compareTo(offer.getRate()) == 0;
           }
         }
 
@@ -252,7 +252,7 @@ public class Harmonia {
     // Cancel existing orders
     if (activeOffers.length != 0) {
       for (BitfinexOfferStatusResponse offer : activeOffers) {
-        if ("USD".equalsIgnoreCase(offer.getCurrency())) {
+        if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection())) ) {
           System.out.println("Cancelling " + offer.toString());
           tradeService.cancelBitfinexOffer(Integer.toString(offer.getId()));
         }
@@ -272,7 +272,7 @@ public class Harmonia {
       int dayPeriod = Math.max(Math.min((int) ((rate.doubleValue() - frr.doubleValue()) / frr.doubleValue() * 30), 30), 2);
 
       FixedRateLoanOrder order = new FixedRateLoanOrder(OrderType.ASK, "USD", amount, dayPeriod, "", null, rate);
-      System.out.println("Sending " + order.toString());
+      System.out.println("Sending " + order.toString() + ", rate=" + rate);
       tradeService.placeBitfinexFixedRateLoanOrder(order, BitfinexOrderType.LIMIT);
     }
   }
