@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.Date;
 
 import com.xeiam.xchange.Exchange;
@@ -16,6 +17,7 @@ import com.xeiam.xchange.bitfinex.v1.dto.account.BitfinexBalancesResponse;
 import com.xeiam.xchange.bitfinex.v1.dto.marketdata.BitfinexLend;
 import com.xeiam.xchange.bitfinex.v1.dto.marketdata.BitfinexLendDepth;
 import com.xeiam.xchange.bitfinex.v1.dto.marketdata.BitfinexLendLevel;
+import com.xeiam.xchange.bitfinex.v1.dto.marketdata.BitfinexTicker;
 import com.xeiam.xchange.bitfinex.v1.dto.trade.BitfinexCreditResponse;
 import com.xeiam.xchange.bitfinex.v1.dto.trade.BitfinexOfferStatusResponse;
 import com.xeiam.xchange.bitfinex.v1.service.polling.BitfinexAccountServiceRaw;
@@ -63,159 +65,200 @@ public class Harmonia {
     BitfinexAccountServiceRaw accountService = (BitfinexAccountServiceRaw) bfx.getPollingAccountService();
     BitfinexTradeServiceRaw tradeService = (BitfinexTradeServiceRaw) bfx.getPollingTradeService();
 
-    BigDecimal minFunds = new BigDecimal("50"); // minimum amount needed (USD) to lend
-    BigDecimal maxRate = new BigDecimal("2555"); // 7% per day * 365 days
-    BigDecimal minRate = new BigDecimal("10"); // 10% per 365 days
-    double millisecondsInDay = 86400000.0;
+    
+    final BigDecimal MIN_FUNDS_USD = new BigDecimal("50.0"); // minimum amount needed (USD) to lend
+    final double millisecondsInDay = 86400000.0;
+    
+    final String[] currencyArray = {"USD", "BTC", "LTC", "TH1"};
+    final BigDecimal[] maxRateArray = {new BigDecimal("2555"), new BigDecimal("2555"), new BigDecimal("2555"), new BigDecimal("2555")}; // 7% per day * 365 days
+    final BigDecimal[] minRateArray = {new BigDecimal("10"), new BigDecimal("1.2775"), new BigDecimal("2.5"), new BigDecimal("0")}; // 10% per 365 days
 
-    BigDecimal depositFunds = BigDecimal.ZERO;
-    double estimatedAccumulatedInterest = 0.0;
     Date previousLoopIterationDate = new Date();
+    
+    BigDecimal[] depositFunds = new BigDecimal[currencyArray.length];
+    Arrays.fill(depositFunds, BigDecimal.ZERO);
 
+    double[] estimatedAccumulatedInterest = new double[currencyArray.length];
+    Arrays.fill(estimatedAccumulatedInterest, 0.0);
+
+    
     while (true) {
       try {
         BitfinexBalancesResponse[] balances = accountService.getBitfinexAccountInfo();
         BitfinexOfferStatusResponse[] activeOffers = tradeService.getBitfinexOpenOffers();
         BitfinexCreditResponse[] activeCredits = tradeService.getBitfinexActiveCredits();
-        BitfinexLend[] lends = marketDataService.getBitfinexLends("USD", 0, 1);
 
-        Date currentLoopIterationDate = new Date();
-        BigDecimal activeCreditAmount = BigDecimal.ZERO;
-        double activeCreditInterest = 0.0;
-        BigDecimal frr = lends[0].getRate();
+        currencyStart:
 
-        for (BitfinexCreditResponse credit : activeCredits) {
-          if ("USD".equalsIgnoreCase(credit.getCurrency())) {
-            activeCreditAmount = activeCreditAmount.add(credit.getAmount());
-            BigDecimal creditRate = credit.getRate();
+          for (int currencyIndex=0; currencyIndex<currencyArray.length; currencyIndex++)
+          {
+        	final String currency = currencyArray[currencyIndex];
+        	final BigDecimal maxRate = maxRateArray[currencyIndex];
+        	final BigDecimal minRate = minRateArray[currencyIndex];
 
-            // Since we do not allow rates below minRate (which should be greater than zero)
-            // any 0 rate active credit is assumed to be at the flash return rate
-            if (BigDecimal.ZERO.compareTo(creditRate) == 0)
-              creditRate = frr;
-
-            activeCreditInterest = activeCreditInterest + credit.getAmount().doubleValue() * (creditRate.doubleValue() / 365 / 100) // rate per day in whole number terms (not percentage)
-                * ((double) (currentLoopIterationDate.getTime() - previousLoopIterationDate.getTime()) / millisecondsInDay);
-          }
-        }
-
-        previousLoopIterationDate = currentLoopIterationDate;
-
-        BigDecimal activeOfferAmount = BigDecimal.ZERO;
-        BigDecimal activeOfferRate = BigDecimal.ZERO;
-        boolean activeOfferFrr = false;
-
-        for (BitfinexOfferStatusResponse offer : activeOffers) {
-          if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection()) ) ) {
-            activeOfferAmount = activeOfferAmount.add(offer.getRemainingAmount());
-            activeOfferRate = offer.getRate();
-            activeOfferFrr = BigDecimal.ZERO.compareTo(offer.getRate()) == 0;
-          }
-        }
-
-        for (BitfinexBalancesResponse balance : balances) {
-          if ("deposit".equalsIgnoreCase(balance.getType()) && "USD".equalsIgnoreCase(balance.getCurrency())) {
-            if (depositFunds.compareTo(balance.getAmount()) == 0) {
-              estimatedAccumulatedInterest = estimatedAccumulatedInterest + activeCreditInterest;
-              System.out.println("Estimated total accrued interest " + estimatedAccumulatedInterest);
-            } else {
-              System.out.println("BFX paid " + (balance.getAmount().subtract(depositFunds)) + " (post-fees) with the estimate of " + estimatedAccumulatedInterest + " (pre-fees)");
-              depositFunds = balance.getAmount();
-              estimatedAccumulatedInterest = 0.0;
-            }
-          }
-        }
-
-        BigDecimal inactiveFunds = depositFunds.subtract(activeCreditAmount);
-
-        // If we have the minimum or more of inactive funding ($50 USD), get data and go through calculation
-        if (inactiveFunds.compareTo(minFunds) >= 0) {
-          BigDecimal bestBidRate = BigDecimal.ZERO;
-          double prevTimestamp = (((double) (new Date()).getTime()) / 1000) - 60 * 10;
-          boolean bidFrr = false;
-          BitfinexLendDepth book = marketDataService.getBitfinexLendBook("USD", 5000, 5000);
-
-          for (BitfinexLendLevel bidLevel : book.getBids()) {
-            // Ignore any bids below our minimum rate
-            if (bidLevel.getRate().compareTo(minRate) < 0) {
-              continue;
-            }
-
-            if (bidLevel.getRate().compareTo(bestBidRate) > 0) {
-              bestBidRate = bidLevel.getRate();
-
-              if ("Yes".equalsIgnoreCase(bidLevel.getFrr())) {
-                bidFrr = true;
-              } else {
-                bidFrr = false;
+        	
+            for (BitfinexBalancesResponse balance : balances) {
+              if ("deposit".equalsIgnoreCase(balance.getType()) && currency.equalsIgnoreCase(balance.getCurrency())) {
+                if (balance.getAmount().compareTo(BigDecimal.ZERO) == 0) {
+                  continue currencyStart;
+                } else {
+                  break;
+                }
+              } else if ( (balance.toString()).equalsIgnoreCase((balances[balances.length-1]).toString()) ) {
+                continue currencyStart;
               }
             }
-          }
 
-          // If the FRR is demanded by buyers and our current order differs, send an order for FRR
-          if (bidFrr && !matchesCurrentOrder(activeOfferFrr, activeOfferAmount, activeOfferRate, true, inactiveFunds, BigDecimal.ZERO)) {
+			System.out.println("*******************************************************************");
+		    System.out.println(currency);
 
-            // Cancel existing orders and send new FRR order
-            cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds, BigDecimal.ZERO, frr);
+		    
+    		BitfinexLend[] lends = marketDataService.getBitfinexLends(currency, 0, 1);
+    		
+    		BigDecimal minFunds = MIN_FUNDS_USD;
+            if (!currency.equalsIgnoreCase("USD")) {
+              BitfinexTicker ticker = marketDataService.getBitfinexTicker((currency).concat("USD"));
+         	  minFunds = MIN_FUNDS_USD.divide(ticker.getBid(), 3, BigDecimal.ROUND_UP);
+         	}
 
-          } else { // flash return rate demanded by sellers, send a competitive fixed rate order
-            BigDecimal bestAskOutsideBestBid = maxRate;
-            BigDecimal secondBestAskOutsideBestBid = maxRate;
-            BigDecimal bestAskOutsideBestBidAmount = BigDecimal.ZERO;
-            boolean bestAskFrr = false;
+	        Date currentLoopIterationDate = new Date();
+     	    BigDecimal activeCreditAmount = BigDecimal.ZERO;
+        	double activeCreditInterest = 0.0;
+        	final BigDecimal FRR = lends[0].getRate();
 
-            for (BitfinexLendLevel askLevel : book.getAsks()) {
-              // Ignore any asks below our minimum rate or newer than some arbitrary time period
-              if (askLevel.getRate().compareTo(minRate) < 0 || askLevel.getTimestamp() > prevTimestamp) {
-                continue;
+        	for (BitfinexCreditResponse credit : activeCredits) {
+          	  if (currency.equalsIgnoreCase(credit.getCurrency())) {
+      	        activeCreditAmount = activeCreditAmount.add(credit.getAmount());
+            	BigDecimal creditRate = credit.getRate();
+
+            	// Since we do not allow rates below minRate (which should be greater than zero)
+            	// any 0 rate active credit is assumed to be at the flash return rate
+            	if (BigDecimal.ZERO.compareTo(creditRate) == 0)
+              	  creditRate = FRR;
+
+            	activeCreditInterest = activeCreditInterest + credit.getAmount().doubleValue() * (creditRate.doubleValue() / 365 / 100) // rate per day in whole number terms (not percentage)
+                	* ((double) (currentLoopIterationDate.getTime() - previousLoopIterationDate.getTime()) / millisecondsInDay);
+          	  }
+        	}
+
+        	previousLoopIterationDate = currentLoopIterationDate;
+
+        	BigDecimal activeOfferAmount = BigDecimal.ZERO;
+        	BigDecimal activeOfferRate = BigDecimal.ZERO;
+        	boolean activeOfferFrr = false;
+
+        	for (BitfinexOfferStatusResponse offer : activeOffers) {
+              if (currency.equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection())) ) {
+                activeOfferAmount = activeOfferAmount.add(offer.getRemainingAmount());
+                activeOfferRate = offer.getRate();
+                activeOfferFrr = BigDecimal.ZERO.compareTo(offer.getRate()) == 0;
               }
+        	}
 
-              if (askLevel.getRate().compareTo(bestBidRate) > 0) {
-                if (askLevel.getRate().compareTo(bestAskOutsideBestBid) < 0) {
-                  secondBestAskOutsideBestBid = bestAskOutsideBestBid;
-                  bestAskOutsideBestBid = askLevel.getRate();
-                  bestAskOutsideBestBidAmount = BigDecimal.ZERO;
+        	for (BitfinexBalancesResponse balance : balances) {
+          	  if ("deposit".equalsIgnoreCase(balance.getType()) && currency.equalsIgnoreCase(balance.getCurrency())) {
+                if (depositFunds[currencyIndex].compareTo(balance.getAmount()) == 0) {
+              	  estimatedAccumulatedInterest[currencyIndex] = estimatedAccumulatedInterest[currencyIndex] + activeCreditInterest;
+              	  System.out.println("Estimated total accrued interest " + estimatedAccumulatedInterest[currencyIndex]);
+            	} else {
+              	  System.out.println("BFX paid " + (balance.getAmount().subtract(depositFunds[currencyIndex])) + " (post-fees) with the estimate of " + estimatedAccumulatedInterest[currencyIndex] + " (pre-fees)");
+              	  depositFunds[currencyIndex] = balance.getAmount();
+              	  estimatedAccumulatedInterest[currencyIndex] = 0.0;
+                }
+          	  }
+        	}
 
-                  if ("Yes".equals(askLevel.getFrr())) {
-                    bestAskFrr = true;
-                  } else {
-                    bestAskFrr = false;
+        	BigDecimal inactiveFunds = depositFunds[currencyIndex].subtract(activeCreditAmount);
+        	
+        	// If we have the minimum or more of inactive funding ($50 USD), get data and go through calculation
+        	if (inactiveFunds.compareTo(minFunds) >= 0) {
+          	  BigDecimal bestBidRate = BigDecimal.ZERO;
+          	  double prevTimestamp = (((double) (new Date()).getTime()) / 1000) - 60 * 10;
+          	  boolean bidFrr = false;
+          	  BitfinexLendDepth book = marketDataService.getBitfinexLendBook(currency, 5000, 5000);
+
+          	  for (BitfinexLendLevel bidLevel : book.getBids()) {
+            	// Ignore any bids below our minimum rate
+            	if (bidLevel.getRate().compareTo(minRate) < 0) {
+              	  continue;
+            	}
+
+            	if (bidLevel.getRate().compareTo(bestBidRate) > 0) {
+              	  bestBidRate = bidLevel.getRate();
+
+              	  if ("Yes".equalsIgnoreCase(bidLevel.getFrr())) {
+                    bidFrr = true;
+              	  } else {
+                    bidFrr = false;
+              	  }
+                }
+          	  }
+
+          	  // If the FRR is demanded by buyers and our current order differs, send an order for FRR
+          	  if (bidFrr && !matchesCurrentOrder(activeOfferFrr, activeOfferAmount, activeOfferRate, true, inactiveFunds, BigDecimal.ZERO)) {
+
+                // Cancel existing orders and send new FRR order
+                cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds, BigDecimal.ZERO, FRR, currency);
+
+          	  } else { // flash return rate demanded by sellers, send a competitive fixed rate order
+                BigDecimal bestAskOutsideBestBid = maxRate;
+                BigDecimal secondBestAskOutsideBestBid = maxRate;
+                BigDecimal bestAskOutsideBestBidAmount = BigDecimal.ZERO;
+                boolean bestAskFrr = false;
+
+                for (BitfinexLendLevel askLevel : book.getAsks()) {
+                  // Ignore any asks below our minimum rate or newer than some arbitrary time period
+                  if (askLevel.getRate().compareTo(minRate) < 0 || askLevel.getTimestamp() > prevTimestamp) {
+                  continue;
+                }
+
+                if (askLevel.getRate().compareTo(bestBidRate) > 0) {
+                  if (askLevel.getRate().compareTo(bestAskOutsideBestBid) < 0) {
+                    secondBestAskOutsideBestBid = bestAskOutsideBestBid;
+                    bestAskOutsideBestBid = askLevel.getRate();
+                    bestAskOutsideBestBidAmount = BigDecimal.ZERO;
+
+                    if ("Yes".equals(askLevel.getFrr())) {
+                      bestAskFrr = true;
+                    } else {
+                      bestAskFrr = false;
+                    }
+                  }
+
+                  // Add to the amount if we've found the best ask
+                  if (askLevel.getRate().compareTo(bestAskOutsideBestBid) == 0) {
+                    bestAskOutsideBestBidAmount = bestAskOutsideBestBidAmount.add(askLevel.getAmount());
                   }
                 }
-
-                // Add to the amount if we've found the best ask
-                if (askLevel.getRate().compareTo(bestAskOutsideBestBid) == 0) {
-                  bestAskOutsideBestBidAmount = bestAskOutsideBestBidAmount.add(askLevel.getAmount());
-                }
               }
-            }
 
-            // If the best offer is FRR, just sit with everyone else
-            if (bestAskFrr && !matchesCurrentOrder(activeOfferFrr, activeOfferAmount, activeOfferRate, true, inactiveFunds, BigDecimal.ZERO)) {
-              // Cancel existing orders and send new FRR order
-              cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds, BigDecimal.ZERO, frr);
+              // If the best offer is FRR, just sit with everyone else
+              if (bestAskFrr && !matchesCurrentOrder(activeOfferFrr, activeOfferAmount, activeOfferRate, true, inactiveFunds, BigDecimal.ZERO)) {
+                // Cancel existing orders and send new FRR order
+                cancelPreviousAndSendNewOrder(tradeService, activeOffers, true, inactiveFunds, BigDecimal.ZERO, FRR, currency);
 
-            } else if (!bestAskFrr) {
-              // Best ask is not FRR, we need to send a competitive fixed rate
-              System.out.println("Comparing best ask outside best bid amount " + bestAskOutsideBestBidAmount + " with our offer amount " + activeOfferAmount);
-              if (bestAskOutsideBestBidAmount.compareTo(activeOfferAmount) == 0) {
-                // Don't stay out there alone
-                // Join second best ask outside of best bid
-                cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, secondBestAskOutsideBestBid, frr);
-              } else if (!matchesCurrentOrder(activeOfferFrr, activeOfferAmount, activeOfferRate, false, inactiveFunds, bestAskOutsideBestBid)) {
-                // Join best ask outside of best bid
-                cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, bestAskOutsideBestBid, frr);
+              } else if (!bestAskFrr) {
+                // Best ask is not FRR, we need to send a competitive fixed rate
+                System.out.println("Comparing best ask outside best bid amount " + bestAskOutsideBestBidAmount + " with our offer amount " + activeOfferAmount);
+                if (bestAskOutsideBestBidAmount.compareTo(activeOfferAmount) == 0) {
+                  // Don't stay out there alone
+                  // Join second best ask outside of best bid
+                  cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, secondBestAskOutsideBestBid, FRR, currency);
+                } else if (!matchesCurrentOrder(activeOfferFrr, activeOfferAmount, activeOfferRate, false, inactiveFunds, bestAskOutsideBestBid)) {
+                  // Join best ask outside of best bid
+                  cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, bestAskOutsideBestBid, FRR, currency);
+                } else {
+                  System.out.println("Matched previous isFrr: " + activeOfferFrr + " amount: " + activeOfferAmount + " rate: " + activeOfferRate);
+                }
               } else {
                 System.out.println("Matched previous isFrr: " + activeOfferFrr + " amount: " + activeOfferAmount + " rate: " + activeOfferRate);
               }
-            } else {
-              System.out.println("Matched previous isFrr: " + activeOfferFrr + " amount: " + activeOfferAmount + " rate: " + activeOfferRate);
             }
-          }
 
-        } else {
-          System.out.println("Difference " + inactiveFunds + " not enough to post order");
-        }
+          } else {
+            System.out.println("Difference " + inactiveFunds + " not enough to post order (minimum " + minFunds + ")");
+          }
+        } // currency loop
 
       } catch (IOException e1) {
         e1.printStackTrace();
@@ -248,11 +291,11 @@ public class Harmonia {
     return true;
   }
 
-  private static void cancelPreviousAndSendNewOrder(BitfinexTradeServiceRaw tradeService, BitfinexOfferStatusResponse[] activeOffers, boolean isFrr, BigDecimal amount, BigDecimal rate, BigDecimal frr) throws IOException {
+  private static void cancelPreviousAndSendNewOrder(BitfinexTradeServiceRaw tradeService, BitfinexOfferStatusResponse[] activeOffers, boolean isFrr, BigDecimal amount, BigDecimal rate, BigDecimal FRR, String currency) throws IOException {
     // Cancel existing orders
     if (activeOffers.length != 0) {
       for (BitfinexOfferStatusResponse offer : activeOffers) {
-        if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection())) ) {
+    	if (currency.equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection())) ) {
           System.out.println("Cancelling " + offer.toString());
           tradeService.cancelBitfinexOffer(Integer.toString(offer.getId()));
         }
@@ -262,16 +305,16 @@ public class Harmonia {
     }
 
     if (isFrr) {
-      FloatingRateLoanOrder order = new FloatingRateLoanOrder(OrderType.ASK, "USD", amount, 30, "", null, BigDecimal.ZERO);
+      FloatingRateLoanOrder order = new FloatingRateLoanOrder(OrderType.ASK, currency, amount, 30, "", null, BigDecimal.ZERO);
       System.out.println("Sending " + order.toString());
       tradeService.placeBitfinexFloatingRateLoanOrder(order, BitfinexOrderType.MARKET);
     } else {
       // Set the day period for somewhere between 2 and 30 days. We compare our order's rate to the flash return rate.
       // If we're at or below the FRR, set the day period to 2. If we're above, use the ratio of our rate to the FRR to
-      // determine how many days we should offer with a cap of 30 using: (ourRate - frr) / frr * 30
-      int dayPeriod = Math.max(Math.min((int) ((rate.doubleValue() - frr.doubleValue()) / frr.doubleValue() * 30), 30), 2);
+      // determine how many days we should offer with a cap of 30 using: (ourRate - FRR) / FRR * 30
+      int dayPeriod = Math.max(Math.min((int) ((rate.doubleValue() - FRR.doubleValue()) / FRR.doubleValue() * 30), 30), 2);
 
-      FixedRateLoanOrder order = new FixedRateLoanOrder(OrderType.ASK, "USD", amount, dayPeriod, "", null, rate);
+      FixedRateLoanOrder order = new FixedRateLoanOrder(OrderType.ASK, currency, amount, dayPeriod, "", null, rate);
       System.out.println("Sending " + order.toString() + ", rate=" + rate);
       tradeService.placeBitfinexFixedRateLoanOrder(order, BitfinexOrderType.LIMIT);
     }
