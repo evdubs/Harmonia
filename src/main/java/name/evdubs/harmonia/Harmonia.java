@@ -6,6 +6,20 @@ import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.util.Date;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.Filter;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.RollingFileAppender;
+import org.apache.logging.log4j.core.appender.rolling.DefaultRolloverStrategy;
+import org.apache.logging.log4j.core.appender.rolling.TimeBasedTriggeringPolicy;
+import org.apache.logging.log4j.core.config.AppenderRef;
+import org.apache.logging.log4j.core.config.Configuration;
+import org.apache.logging.log4j.core.config.LoggerConfig;
+import org.apache.logging.log4j.core.config.Property;
+import org.apache.logging.log4j.core.layout.PatternLayout;
+
 import com.xeiam.xchange.Exchange;
 import com.xeiam.xchange.ExchangeException;
 import com.xeiam.xchange.ExchangeFactory;
@@ -30,7 +44,48 @@ import com.xeiam.xchange.dto.trade.FloatingRateLoanOrder;
  *
  */
 public class Harmonia {
+  private static final String LOGGER_NAME = "HarmoniaLogger";
+  private static Logger log = LogManager.getLogger(LOGGER_NAME);
+  
   public static void main(String[] args) {
+    // Set up logging
+    LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
+    Configuration config = ctx.getConfiguration();
+    RollingFileAppender rfa = RollingFileAppender.createAppender("/var/tmp/Harmonia.log", 
+        "Harmonia.log.%d{yyyy-MM-dd}", 
+        "true", 
+        "HarmoniaRollingFileAppender", 
+        "true", 
+        "8192", 
+        "true",
+        TimeBasedTriggeringPolicy.createPolicy("1", "true"), 
+        DefaultRolloverStrategy.createStrategy("365", 
+            "0", 
+            "365", 
+            "0", 
+            config), 
+        PatternLayout.createDefaultLayout(), 
+        null, 
+        "true", 
+        "false", 
+        null, 
+        config);
+    rfa.start();
+    config.addAppender(rfa);
+    AppenderRef ref = AppenderRef.createAppenderRef("File", null, null);
+    AppenderRef[] refs = new AppenderRef[] {ref};
+    LoggerConfig loggerConfig = LoggerConfig.createLogger("true", 
+        Level.INFO, 
+        LOGGER_NAME,
+        "true", 
+        refs, 
+        new Property[0], 
+        config, 
+        (Filter) null);
+    loggerConfig.addAppender(rfa, null, null);
+    config.addLogger(LOGGER_NAME, loggerConfig);
+    ctx.updateLoggers();
+    
     // Use the factory to get BFX exchange API using default settings
     Exchange bfx = ExchangeFactory.INSTANCE.createExchange(BitfinexExchange.class.getName());
 
@@ -48,7 +103,7 @@ public class Harmonia {
 
       br.close();
     } catch (IOException e2) {
-      System.out.println("Could not read in keys; exiting.");
+      log.info("Could not read in keys; exiting.");
       e2.printStackTrace();
       System.exit(1);
     }
@@ -117,9 +172,9 @@ public class Harmonia {
           if ("deposit".equalsIgnoreCase(balance.getType()) && "USD".equalsIgnoreCase(balance.getCurrency())) {
             if (depositFunds.compareTo(balance.getAmount()) == 0) {
               estimatedAccumulatedInterest = estimatedAccumulatedInterest + activeCreditInterest;
-              System.out.println("Estimated total accrued interest " + estimatedAccumulatedInterest);
+              log.info("Estimated total accrued interest " + estimatedAccumulatedInterest);
             } else {
-              System.out.println("BFX paid " + (balance.getAmount().subtract(depositFunds)) + " (post-fees) with the estimate of " + estimatedAccumulatedInterest + " (pre-fees)");
+              log.info("BFX paid " + (balance.getAmount().subtract(depositFunds)) + " (post-fees) with the estimate of " + estimatedAccumulatedInterest + " (pre-fees)");
               depositFunds = balance.getAmount();
               estimatedAccumulatedInterest = 0.0;
             }
@@ -197,7 +252,7 @@ public class Harmonia {
 
             } else if (!bestAskFrr) {
               // Best ask is not FRR, we need to send a competitive fixed rate
-              System.out.println("Comparing best ask outside best bid amount " + bestAskOutsideBestBidAmount + " with our offer amount " + activeOfferAmount);
+              log.info("Comparing best ask outside best bid amount " + bestAskOutsideBestBidAmount + " with our offer amount " + activeOfferAmount);
               if (bestAskOutsideBestBidAmount.compareTo(activeOfferAmount) == 0) {
                 // Don't stay out there alone
                 // Join second best ask outside of best bid
@@ -206,15 +261,15 @@ public class Harmonia {
                 // Join best ask outside of best bid
                 cancelPreviousAndSendNewOrder(tradeService, activeOffers, false, inactiveFunds, bestAskOutsideBestBid, frr);
               } else {
-                System.out.println("Matched previous isFrr: " + activeOfferFrr + " amount: " + activeOfferAmount + " rate: " + activeOfferRate);
+                log.info("Matched previous isFrr: " + activeOfferFrr + " amount: " + activeOfferAmount + " rate: " + activeOfferRate);
               }
             } else {
-              System.out.println("Matched previous isFrr: " + activeOfferFrr + " amount: " + activeOfferAmount + " rate: " + activeOfferRate);
+              log.info("Matched previous isFrr: " + activeOfferFrr + " amount: " + activeOfferAmount + " rate: " + activeOfferRate);
             }
           }
 
         } else {
-          System.out.println("Difference " + inactiveFunds + " not enough to post order");
+          log.info("Difference " + inactiveFunds + " not enough to post order");
         }
 
       } catch (IOException e1) {
@@ -233,15 +288,15 @@ public class Harmonia {
 
   private static boolean matchesCurrentOrder(boolean currentFrr, BigDecimal currentAmount, BigDecimal currentRate, boolean newFrr, BigDecimal newAmount, BigDecimal newRate) {
 
-    System.out.println("Comparing currentFrr: " + currentFrr + " with newFrr: " + newFrr);
+    log.info("Comparing currentFrr: " + currentFrr + " with newFrr: " + newFrr);
     if (currentFrr != newFrr)
       return false;
 
-    System.out.println("Comparing currentAmount: " + currentAmount + " with newAmount: " + newAmount);
+    log.info("Comparing currentAmount: " + currentAmount + " with newAmount: " + newAmount);
     if (currentAmount.compareTo(newAmount) != 0)
       return false;
 
-    System.out.println("Comparing currentRate: " + currentRate + " with newRate: " + newRate);
+    log.info("Comparing currentRate: " + currentRate + " with newRate: " + newRate);
     if (currentRate.compareTo(newRate) != 0)
       return false;
 
@@ -253,17 +308,17 @@ public class Harmonia {
     if (activeOffers.length != 0) {
       for (BitfinexOfferStatusResponse offer : activeOffers) {
         if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection())) ) {
-          System.out.println("Cancelling " + offer.toString());
+          log.info("Cancelling " + offer.toString());
           tradeService.cancelBitfinexOffer(Integer.toString(offer.getId()));
         }
       }
     } else {
-      System.out.println("Found no previous order to cancel");
+      log.info("Found no previous order to cancel");
     }
 
     if (isFrr) {
       FloatingRateLoanOrder order = new FloatingRateLoanOrder(OrderType.ASK, "USD", amount, 30, "", null, BigDecimal.ZERO);
-      System.out.println("Sending " + order.toString());
+      log.info("Sending " + order.toString());
       tradeService.placeBitfinexFloatingRateLoanOrder(order, BitfinexOrderType.MARKET);
     } else {
       // Set the day period for somewhere between 2 and 30 days. We compare our order's rate to the flash return rate.
@@ -272,7 +327,7 @@ public class Harmonia {
       int dayPeriod = Math.max(Math.min((int) ((rate.doubleValue() - frr.doubleValue()) / frr.doubleValue() * 30), 30), 2);
 
       FixedRateLoanOrder order = new FixedRateLoanOrder(OrderType.ASK, "USD", amount, dayPeriod, "", null, rate);
-      System.out.println("Sending " + order.toString() + ", rate=" + rate);
+      log.info("Sending " + order.toString() + ", rate=" + rate);
       tradeService.placeBitfinexFixedRateLoanOrder(order, BitfinexOrderType.LIMIT);
     }
   }
