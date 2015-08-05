@@ -46,46 +46,23 @@ import com.xeiam.xchange.dto.trade.FloatingRateLoanOrder;
 public class Harmonia {
   private static final String LOGGER_NAME = "HarmoniaLogger";
   private static Logger log = LogManager.getLogger(LOGGER_NAME);
-  
+
   public static void main(String[] args) {
     // Set up logging
     LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
     Configuration config = ctx.getConfiguration();
-    RollingFileAppender rfa = RollingFileAppender.createAppender("/var/tmp/Harmonia.log", 
-        "Harmonia.log.%d{yyyy-MM-dd}", 
-        "true", 
-        "HarmoniaRollingFileAppender", 
-        "true", 
-        "8192", 
-        "true",
-        TimeBasedTriggeringPolicy.createPolicy("1", "true"), 
-        DefaultRolloverStrategy.createStrategy("365", 
-            "0", 
-            "365", 
-            "0", 
-            config), 
-        PatternLayout.createDefaultLayout(), 
-        null, 
-        "true", 
-        "false", 
-        null, 
+    RollingFileAppender rfa = RollingFileAppender.createAppender("/var/tmp/Harmonia.log", "Harmonia.log.%d{yyyy-MM-dd}", "true", "HarmoniaRollingFileAppender", "true", "8192", "true",
+        TimeBasedTriggeringPolicy.createPolicy("1", "true"), DefaultRolloverStrategy.createStrategy("365", "1", "1", "0", config), PatternLayout.createDefaultLayout(), null, "true", "false", null,
         config);
     rfa.start();
     config.addAppender(rfa);
     AppenderRef ref = AppenderRef.createAppenderRef("File", null, null);
-    AppenderRef[] refs = new AppenderRef[] {ref};
-    LoggerConfig loggerConfig = LoggerConfig.createLogger("true", 
-        Level.INFO, 
-        LOGGER_NAME,
-        "true", 
-        refs, 
-        new Property[0], 
-        config, 
-        (Filter) null);
+    AppenderRef[] refs = new AppenderRef[] { ref };
+    LoggerConfig loggerConfig = LoggerConfig.createLogger("true", Level.INFO, LOGGER_NAME, "true", refs, new Property[0], config, (Filter) null);
     loggerConfig.addAppender(rfa, null, null);
     config.addLogger(LOGGER_NAME, loggerConfig);
     ctx.updateLoggers();
-    
+
     // Use the factory to get BFX exchange API using default settings
     Exchange bfx = ExchangeFactory.INSTANCE.createExchange(BitfinexExchange.class.getName());
 
@@ -161,7 +138,7 @@ public class Harmonia {
         boolean activeOfferFrr = false;
 
         for (BitfinexOfferStatusResponse offer : activeOffers) {
-          if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection()) ) ) {
+          if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection()))) {
             activeOfferAmount = activeOfferAmount.add(offer.getRemainingAmount());
             activeOfferRate = offer.getRate();
             activeOfferFrr = BigDecimal.ZERO.compareTo(offer.getRate()) == 0;
@@ -272,16 +249,16 @@ public class Harmonia {
           log.info("Difference " + inactiveFunds + " not enough to post order");
         }
 
-      } catch (IOException e1) {
-        e1.printStackTrace();
+      } catch (IOException e) {
+        log.error(e);
       } catch (ExchangeException e) {
-        e.printStackTrace();
+        log.error(e);
       }
 
       try {
         Thread.sleep(20000);
       } catch (InterruptedException e) {
-        e.printStackTrace();
+        log.error(e);
       }
     }
   }
@@ -303,11 +280,12 @@ public class Harmonia {
     return true;
   }
 
-  private static void cancelPreviousAndSendNewOrder(BitfinexTradeServiceRaw tradeService, BitfinexOfferStatusResponse[] activeOffers, boolean isFrr, BigDecimal amount, BigDecimal rate, BigDecimal frr) throws IOException {
+  private static void cancelPreviousAndSendNewOrder(BitfinexTradeServiceRaw tradeService, BitfinexOfferStatusResponse[] activeOffers, boolean isFrr, BigDecimal amount, BigDecimal rate, BigDecimal frr)
+      throws IOException {
     // Cancel existing orders
     if (activeOffers.length != 0) {
       for (BitfinexOfferStatusResponse offer : activeOffers) {
-        if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection())) ) {
+        if ("USD".equalsIgnoreCase(offer.getCurrency()) && ("lend".equalsIgnoreCase(offer.getDirection()))) {
           log.info("Cancelling " + offer.toString());
           tradeService.cancelBitfinexOffer(Integer.toString(offer.getId()));
         }
