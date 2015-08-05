@@ -51,7 +51,7 @@ public class Harmonia {
     // Set up logging
     LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
     Configuration config = ctx.getConfiguration();
-    RollingFileAppender rfa = RollingFileAppender.createAppender("/var/tmp/Harmonia.log", "Harmonia.log.%d{yyyy-MM-dd}", "true", "HarmoniaRollingFileAppender", "true", "8192", "true",
+    RollingFileAppender rfa = RollingFileAppender.createAppender("/var/tmp/Harmonia.log", "/var/tmp/Harmonia.log.%d{yyyy-MM-dd}", "true", "HarmoniaRollingFileAppender", "true", "8192", "true",
         TimeBasedTriggeringPolicy.createPolicy("1", "true"), DefaultRolloverStrategy.createStrategy("365", "1", "1", "0", config), PatternLayout.createDefaultLayout(), null, "true", "false", null,
         config);
     rfa.start();
