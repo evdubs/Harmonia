@@ -4,7 +4,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.nio.charset.Charset;
 import java.util.Date;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -19,6 +21,7 @@ import org.apache.logging.log4j.core.config.Configuration;
 import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.apache.logging.log4j.core.config.Property;
 import org.apache.logging.log4j.core.layout.PatternLayout;
+import org.apache.logging.log4j.core.pattern.RegexReplacement;
 
 import com.xeiam.xchange.Exchange;
 import com.xeiam.xchange.ExchangeException;
@@ -52,8 +55,9 @@ public class Harmonia {
     LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
     Configuration config = ctx.getConfiguration();
     RollingFileAppender rfa = RollingFileAppender.createAppender("/var/tmp/Harmonia.log", "/var/tmp/Harmonia.log.%d{yyyy-MM-dd}", "true", "HarmoniaRollingFileAppender", "true", "8192", "true",
-        TimeBasedTriggeringPolicy.createPolicy("1", "true"), DefaultRolloverStrategy.createStrategy("365", "1", "1", "0", config), PatternLayout.createDefaultLayout(), null, "true", "false", null,
-        config);
+        TimeBasedTriggeringPolicy.createPolicy("1", "true"), DefaultRolloverStrategy.createStrategy("365", "1", "1", "0", config),
+        PatternLayout.createLayout(PatternLayout.SIMPLE_CONVERSION_PATTERN, config, RegexReplacement.createRegexReplacement(Pattern.compile(""), ""), Charset.defaultCharset(), true, false, "", ""),
+        null, "true", "false", null, config);
     rfa.start();
     config.addAppender(rfa);
     AppenderRef ref = AppenderRef.createAppenderRef("File", null, null);
