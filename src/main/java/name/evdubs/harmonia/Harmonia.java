@@ -155,7 +155,12 @@ public class Harmonia {
               estimatedAccumulatedInterest = estimatedAccumulatedInterest + activeCreditInterest;
               log.info("Estimated total accrued interest " + estimatedAccumulatedInterest);
             } else {
-              log.info("BFX paid " + (balance.getAmount().subtract(depositFunds)) + " (post-fees) with the estimate of " + estimatedAccumulatedInterest + " (pre-fees)");
+              double bfxFee = 0.0;
+              if (estimatedAccumulatedInterest != 0.0) {
+                bfxFee = 1 - (balance.getAmount().subtract(depositFunds).doubleValue() / estimatedAccumulatedInterest);
+              }
+              log.info("BFX paid " + (balance.getAmount().subtract(depositFunds)) + " (post-fees) with the estimate of " + estimatedAccumulatedInterest + " (pre-fees) implying an effective fee of "
+                  + bfxFee);
               depositFunds = balance.getAmount();
               estimatedAccumulatedInterest = 0.0;
             }
