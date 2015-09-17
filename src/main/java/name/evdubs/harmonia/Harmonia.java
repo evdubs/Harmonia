@@ -101,7 +101,7 @@ public class Harmonia {
 
     BigDecimal minFunds = new BigDecimal("50"); // minimum amount needed (USD) to lend
     BigDecimal maxRate = new BigDecimal("2555"); // 7% per day * 365 days
-    BigDecimal minRate = new BigDecimal("10"); // 10% per 365 days
+    BigDecimal minRate = new BigDecimal("5"); // 5% per 365 days
     double millisecondsInDay = 86400000.0;
 
     BigDecimal depositFunds = BigDecimal.ZERO;
