@@ -76,10 +76,12 @@ public class Harmonia {
 
     try {
       System.out.print("API Key: ");
+      System.out.flush();
       BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
       apiKey = br.readLine();
 
       System.out.print("Secret Key: ");
+      System.out.flush();
       secretKey = br.readLine();
 
       br.close();
