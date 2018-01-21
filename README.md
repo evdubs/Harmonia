@@ -18,7 +18,7 @@ When Harmonia starts, you are prompted to enter your API Key and Secret Key. The
 ## Operation
 Harmonia is a simple margin funding offer bot. It will attempt to offer margin funds using the following logic:
 
-### If a flash return rate is bid, hit that bid
+#### If a flash return rate is bid, hit that bid
 Here, the market (everyone else's orders) may look like
 
 | Bid duration | Bid amount | Bid rate    | Offer rate  | Offer amount | Offer duration |
@@ -27,7 +27,7 @@ Here, the market (everyone else's orders) may look like
 
 Harmonia will see this bid and hit it. As a result, you will have outstanding margin funding provided at FRR for 30 days.
 
-### If a flash return rate is the best 10 minute old (or older) offer (lowest percentage), join the other offers
+#### If a flash return rate is the best 10 minute old (or older) offer (lowest percentage), join the other offers
 Here, the market may look like
 
 | Bid duration | Bid amount | Bid rate    | Offer rate  | Offer amount | Offer duration |
@@ -36,7 +36,7 @@ Here, the market may look like
 
 Harmonia will see the FRR order and send an offer with your remaining deposit balance for 30 days FRR. This offer will sit on the book and wait for a margin lender to take it. This calculation is computed once every twenty seconds, so if the market moves, Harmonia will change the offer twenty seconds later.
 
-### If a fixed rate is the best offer, join the best fixed rate that is higher than the best fixed bid and is at least 10 minutes old 
+#### If a fixed rate is the best offer, join the best fixed rate that is higher than the best fixed bid and is at least 10 minutes old 
 Here, the market may look like
 
 | Bid duration | Bid amount | Bid rate    | Offer rate  | Offer amount | Offer duration |
