@@ -18,9 +18,31 @@ When Harmonia starts, you are prompted to enter your API Key and Secret Key. The
 ## Operation
 Harmonia is a simple margin funding offer bot. It will attempt to offer margin funds using the following logic:
 
-1. If a flash return rate is bid, hit that bid. Here, the market (everyone else's orders) may look like: USD margin funding demand: 1 order for 30 days flash return rate per day for $10,000. Harmonia will see this order and take it. As a result, you will have outstanding margin funding provided at FRR for 30 days.
-2. If a flash return rate is the best 10 minute old (or older) offer (lowest percentage), join the other offers. Here, there are only fixed rate demands, e.g. USD margin funding demand: 1 order for 30 days 0.05% per day for $10,000. On the offer side, the flash return rate will be lower than other offers, e.g. USD margin funding demand: 1 offer for 30 days FRR (0.07%) for $10,000 and 1 offer for 30 days 0.09% for $10,000. Harmonia will see the FRR order and post an order with your remaining deposit balance for 30 days FRR.
-3. If a fixed rate is the best offer, join the best fixed rate that is higher than the best fixed bid and is at least 10 minutes old. Here, the demands may look something like: 1 order for 30 days 0.07% per day for $10,000. The offers may look like: 1 offer for 30 days 0.065% per day for $100; 1 offer for 30 days 0.08% per day $500. Harmonia will send an order at 0.08% as the other offer is lower than the highest demand rate.
+### If a flash return rate is bid, hit that bid
+Here, the market (everyone else's orders) may look like
+
+| Bid duration | Bid amount | Bid rate    | Offer rate  | Offer amount | Offer duration |
+|:-------------|-----------:|------------:|------------:|-------------:|:---------------|
+|2-30 days     | 20,000     | 0.05% (FRR) | 0.06%       | 30,000       | 30 days        |
+
+Harmonia will see this bid and hit it. As a result, you will have outstanding margin funding provided at FRR for 30 days.
+
+### If a flash return rate is the best 10 minute old (or older) offer (lowest percentage), join the other offers
+
+| Bid duration | Bid amount | Bid rate    | Offer rate  | Offer amount | Offer duration |
+|:-------------|-----------:|------------:|------------:|-------------:|:---------------|
+|2-30 days     | 20,000     | 0.05%       | 0.06% (FRR) | 30,000       | 30 days        |
+
+Harmonia will see the FRR order and send an offer with your remaining deposit balance for 30 days FRR. This offer will sit on the book and wait for a margin lender to take it. This calculation is computed once every twenty seconds, so if the market moves, Harmonia will change the offer twenty seconds later.
+
+### If a fixed rate is the best offer, join the best fixed rate that is higher than the best fixed bid and is at least 10 minutes old 
+
+| Bid duration | Bid amount | Bid rate    | Offer rate  | Offer amount | Offer duration |
+|:-------------|-----------:|------------:|------------:|-------------:|:---------------|
+|2-30 days     | 20,000     | 0.06%       | 0.055%      | 30,000       | 30 days        |
+|2-30 days     | 40,000     | 0.05%       | 0.065%      | 60,000       | 30 days        |
+
+Harmonia will send an offer at 0.065% as the 0.055% offer is lower than the highest demand rate of 0.06%. This offer will sit on the book and wait for a margin lender to take it. This calculation is computed once every twenty seconds, so if the market moves, Harmonia will change the offer twenty seconds later.
 
 Harmonia recently instituted the requirement to only pay attention to offers that are at least 10 minutes old. This is a hacky way to not automatically join offers that are outlandishly far away from the core of the competitive offers. A better mechanism would likely incorporate a moving average of recent margin funding matches, but there is not currently a way to receive this stream from XChange. 
 
