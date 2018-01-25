@@ -41,7 +41,7 @@ Here, the market may look like
 
 | Bid duration | Bid amount | Bid rate    | Offer rate  | Offer amount | Offer duration |
 |:-------------|-----------:|------------:|------------:|-------------:|:---------------|
-|2-30 days     | 20,000     | 0.06%       | 0.055%      | 30,000       | 30 days        |
+|2-20 days     | 20,000     | 0.06%       | 0.055%      | 30,000       | 30 days        |
 |2-30 days     | 40,000     | 0.05%       | 0.065%      | 60,000       | 30 days        |
 
 Harmonia will send an offer at 0.065% as the 0.055% offer is lower than the highest demand rate of 0.06%. This offer will sit on the book and wait for a margin lender to take it. This calculation is computed once every twenty seconds, so if the market moves, Harmonia will change the offer twenty seconds later.
